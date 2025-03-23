@@ -4,7 +4,8 @@ import os
 import mysql.connector
 
 app = Flask(__name__)
-
+# dir = "/data/flask-api/data/extratoNov.xlsx"
+# file = "extratoNov.xlsx"
 # Database config with env. variables
 db_config = {
     "host": os.getenv("DB_HOST", "db"),
@@ -25,21 +26,25 @@ def load_statement(file_path):
 
 @app.route('/statement', methods=['GET'])
 def get_statement():
-    df = load_statement("data/extratoNov.xlsx")
+    df = load_statement("/data/flask-api/data/extratoNov.xlsx")
     return jsonify(df.to_dict(orient="records"))
 
 @app.route('/save-statement/<int:user_id>', methods=['POST'])
 def save_statement(user_id):
-    data = request.json
+    data = load_statement("/data/flask-api/data/extratoNov.xlsx")
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    for row in data:
-        cursor.execute(
-            "INSERT INTO transactions (user_id, description, amount, date, category) VALUES (%s, %s, %s, %s, %s)",
-            (user_id, row["Descrição"], row["Valor (R$)"], row["Data"], row.get("Categoria"))
-        )
-    
+    try:
+        for _, row in data.iterrows():
+            cursor.execute(
+                "INSERT INTO transactions (user_id, description, amount, date, category) VALUES (%s, %s, %s, %s, %s)",
+                (user_id, row["Descrição"], row["Valor (R$)"], row["Data"], row.get("Categoria"))
+            )
+    except mysql.connector.errors.IntegrityError:
+        # Ignora duplicatas por causa da restrição UNIQUE
+        pass
+
     conn.commit()
     cursor.close()
     conn.close()
